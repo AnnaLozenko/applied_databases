@@ -1,8 +1,14 @@
+# connect to database in MySQL
 import mysql.connector
+# handle errors
 from mysql.connector import Error
+# file with database credentials
 import config as cfg
 
-#1. View Speakers and Sessions
+
+# ==========================================
+# 1. VIEW SPEAKERS AND SESSIONS
+# ==========================================
 def view_speakers_and_sessions(cursor):
     search_string = input("Enter speaker's name (or part of it): ")
     query = """
@@ -22,7 +28,9 @@ def view_speakers_and_sessions(cursor):
             speaker_name, session_title, room_name = row
             print(f"Speaker: {speaker_name}\nSession: {session_title}\nRoom: {room_name}\n")
 
-#. View Attendees by Company
+# ========================================================
+# 2. VIEW ATTENDEES BY COMPANY + HANDLING ERROR CONDITIONS
+# ========================================================
 def view_attendees_by_company(cursor):
     """Tasks 3 & 4: View Attendees by Company with Validation"""
     while True:
@@ -56,7 +64,7 @@ def view_attendees_by_company(cursor):
                 """
         cursor.execute(query, (company_id,))
         attendees = cursor.fetchall()
-
+    # HANDLING ERROR CONDITIONS
         if not attendees:
             print(f"No attendees found for {company_name}")
             continue
@@ -69,7 +77,57 @@ def view_attendees_by_company(cursor):
             print(f"Speaker: {att[3]} | Room: {att[4]}")
             print("-" * 20)
         break  # Exit the loop and return to main menu
+# ==========================================
+# 3. ADD NEW ATTENDEE + ERROR HANDLING
+# ==========================================
+def add_new_attendee(conn, cursor):
 
+    print("\n--- Add New Attendee ---")
+
+    # 1. Gather inputs from the user
+    attendee_id = input("Enter Attendee ID: ")
+    name = input("Enter Name: ")
+    dob = input("Enter DOB (YYYY-MM-DD): ")
+    gender = input("Enter Gender (Male/Female): ")
+    company_id = input("Enter Company ID: ")
+
+    # 2. Validate Gender first
+    if gender not in ['Male', 'Female']:
+        print("***ERROR***Gender must be Male/Female")
+        return  # Exits the function and goes back to the main menu
+
+    try:
+        # 3. Check if Attendee ID already exists
+        cursor.execute("SELECT attendeeID FROM attendee WHERE attendeeID = %s", (attendee_id,))
+        if cursor.fetchone():
+            print(f"***ERROR*** Attendee ID: {attendee_id} already exists")
+            return
+
+        # 4. Check if Company ID exists
+        cursor.execute("SELECT companyID FROM company WHERE companyID = %s", (company_id,))
+        if not cursor.fetchone():
+            print(f"***ERROR***Company ID: {company_id} does not exist")
+            return
+
+        # 5. Insert the new attendee
+        insert_query = """
+                       INSERT INTO attendee (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID)
+                       VALUES (%s, %s, %s, %s, %s) \
+                       """
+        cursor.execute(insert_query, (attendee_id, name, dob, gender, company_id))
+
+        # MUST COMMIT to save the changes to the database
+        conn.commit()
+        print("Attendee successfully added")
+    # CATCH ANY OTHER DATABASE ERRORS
+    except Error as e:
+        print(f"***ERROR***({e})")
+        conn.rollback()  # Undo any pending changes if an error occurred
+
+
+# ==========================================
+# THE MAIN FUNCTION TO RUN THE APPLICATION
+# ==========================================
 # variables are initialized to "None", in case connection could not be established, to prevent program from crashing
 def main():
     conn = None
@@ -98,9 +156,13 @@ def main():
                 view_speakers_and_sessions(cursor)
             elif menu == '2':
                 view_attendees_by_company(cursor)
+            elif menu == '3':
+                add_new_attendee(conn, cursor)
             elif menu.lower() == 'x':
                 print("Goodbye!")
                 break
+            else:
+                print("Invalid choice. Please try again.")
     # handle errors
     except Error as e:
         print(f"Error: {e}")
