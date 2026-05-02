@@ -4,6 +4,8 @@ import mysql.connector
 from mysql.connector import Error
 # file with database credentials
 import config as cfg
+# connect to Neo4j database
+from neo4j import GraphDatabase
 
 
 # ===============================
@@ -11,15 +13,11 @@ import config as cfg
 # ===============================
 def view_speakers_and_sessions(cursor):
     '''
+
     The function shows speakers and sessions. The user is prompted to enter a speaker's name (or part of it),
     and the function retrieves and displays the speaker's name, session title, and room name for all matching records.
     If no speakers are found, an appropriate message is displayed.
-    -----------------
-    Parameters:
-        cursor: MySQL cursor object
-    -----------------
-    Returns:
-        speakers names, sessions, rooms names
+
     '''
     search_string = input("Enter speaker's name (or part of it): ")
     query = """
@@ -44,25 +42,35 @@ def view_speakers_and_sessions(cursor):
 # ========================================================
 def view_attendees_by_company(cursor):
     '''
-    Shows attendees by company. User is prompted to enter the Company ID, and the function retrieves and
-    displays the employee details (name, DOB, session, speaker, room) based on the user input.
-    The function also includes error handling for invalid inputs and no attendees found.
-    ----------------
+
+    Retrieves and displays attendees belonging to a specific company.
+
+    Prompts for a Company ID and joins the attendee, registration, session,
+    and room tables to provide a full report. Includes validation for
+    numeric IDs and existence checks.
+    ---------------
     Parameters:
-        cursor: mysql.connector.cursor
-    ----------------
-    Returns:
-        employee details (name, DOB, session, speaker, room)
+        cursor: MySQL cursor object.
+
     '''
     while True:
-        user_input = input("\nEnter Company ID: ")
+        # Validate ID is not blank (user must enter a value)
+        user_input = input("\nEnter Company ID (or 'x' to go back): ").strip()
+
+        #check for exit
+        if user_input.lower() == 'x':
+            break  # Exit the loop and return to main menu
+
+        # Validate ID is numeric
+        if not user_input or not user_input.isdigit():
+            print("Invalid input. Please enter a numeric Company ID.")
+            continue
+        company_id = int(user_input)
 
         # Validate numeric ID > 0
-        if not user_input.isdigit() or int(user_input) <= 0:
-            print("Invalid input. A valid company ID is any number greater than 0.")
+        if company_id <= 0:
+            print("Invalid input. Company ID must be greater than 0.")
             continue
-
-        company_id = int(user_input)
 
         # Check if company exists
         cursor.execute("SELECT companyName FROM company WHERE companyID = %s", (company_id,))
@@ -98,32 +106,28 @@ def view_attendees_by_company(cursor):
             print(f"Speaker: {att[3]} | Room: {att[4]}")
             print("-" * 20)
         break  # Exit the loop and return to main menu
+
 # ======================================
 # 3. ADD NEW ATTENDEE + ERROR HANDLING
 # ======================================
 def add_new_attendee(conn, cursor):
     '''
-    Add a new attendee to the attendees table. The user is prompted to enter the attendee ID, name, gender,
-    DOB and Company ID.
-    The function checks for the following error conditions:
-    - If the gender input is invalid, an error message is displayed and the function exits without making any changes
-        to the database.
-    - If the attendee ID already exists in the database, an error message is displayed and the function exits without
-        making any changes to the database.
-    - If the company ID does not exist in the database, an error message is displayed and the function exits without
-        making any changes to the database.
-    ----------------
+
+    Prompts the user for details to create a new attendee record in MySQL.
+
+    Validates that no fields are left empty, IDs are numeric, gender is
+    correctly formatted, and that both the Attendee ID (must be unique)
+    and Company ID (must exist) are valid.
+
     Parameters:
-        conn: the connection object to the MySQL database, used to commit changes
-        cursor: the cursor object to execute SQL queries against the database
-    ----------------
-    Returns:
-        commit new attendee to database based on user input, with error handling for invalid gender,
-        duplicate attendee ID, and non-existent company ID
+        conn: MySQL connection object (required for commit).
+        cursor: MySQL cursor object.
+
     '''
+
     print("\n--- Add New Attendee ---")
 
-    # 1. Gather inputs from the user
+    # 1. Gather and validate inputs from the user
     attendee_id = input("Enter Attendee ID: ")
     name = input("Enter Name: ")
     dob = input("Enter DOB (YYYY-MM-DD): ")
@@ -159,19 +163,140 @@ def add_new_attendee(conn, cursor):
         conn.commit()
         print("Attendee successfully added")
     # CATCH ANY OTHER DATABASE ERRORS
+# add check data types and that all data has been entered, not empty
     except Error as e:
         print(f"***ERROR***({e})")
         conn.rollback()  # Undo any pending changes if an error occurred
 
 
-# =============================
-# 4. VIEW CONNECTED ATTENDEES
-# =============================
+# ==============================================
+# 4. VIEW CONNECTED ATTENDEES + HANDLING ERRORS
+# ==============================================
 
+def view_connected_attendees(mysql_cursor, neo4j_driver):
+    '''
+    Retrieves social connections for an attendee from Neo4j and MySQL.
 
-# =============================
-# 5. ADD ATTENDEE CONNECTION
-# =============================
+    First validates the attendee exists in MySQL, then fetches their
+    CONNECTED_TO neighbors from the Neo4j graph, and finally resolves
+    those neighbor IDs back into names using MySQL.
+    -------------
+    Parameters:
+        mysql_cursor: MySQL cursor object.
+        neo4j_driver: Neo4j driver object.
+    '''
+
+    while True:
+        user_input = input("\nEnter Attendee ID to view connections (or 'x' to go back): ").strip()
+
+        if user_input.lower() == 'x':
+            return
+
+        # 1. Validation
+        if not user_input or not user_input.isdigit():
+            print("***ERROR*** Invalid Attendee ID. Please enter a number.")
+            continue
+
+        attendee_id = int(user_input)
+
+        # 2. Check MySQL for existence
+        mysql_cursor.execute("SELECT attendeeName FROM attendee WHERE attendeeID = %s", (attendee_id,))
+        result = mysql_cursor.fetchone()
+
+        if not result:
+            print("***ERROR*** Attendee does not exist.")
+            continue
+
+        attendee_name = result[0]
+        print(f"\n--- Connections for {attendee_name} (ID: {attendee_id}) ---")
+
+        # 3. Query Neo4j for connections
+        # The syntax -[:CONNECTED_TO]- without an arrow means all connections are retrieved,
+        # regardless of their direction.
+        cypher_query = """
+                    MATCH (a:Attendee {AttendeeID: $att_id})-[:CONNECTED_TO]-(b:Attendee)
+                    RETURN b.AttendeeID AS connected_id
+                """
+
+        with neo4j_driver.session() as session:
+            records = session.run(cypher_query, att_id=attendee_id)
+            connected_ids = [record["connected_id"] for record in records]
+
+        # 4. Handle results
+        if not connected_ids:
+            print("No connections found.")
+            break
+
+            # 5. Fetch names from MySQL
+        for cid in connected_ids:
+            mysql_cursor.execute("SELECT attendeeName FROM attendee WHERE attendeeID = %s", (cid,))
+            c_result = mysql_cursor.fetchone()
+            if c_result:
+                print(f"ID: {cid} | Name: {c_result[0]}")
+        break
+
+# =============================================
+# 5. ADD ATTENDEE CONNECTION + HANDLING ERRORS
+# =============================================
+def add_attendee_connection(mysql_cursor, neo4j_driver):
+    """
+    This function adds a CONNECTED_TO relationship between two attendees.
+    It first verifies that both attendees exist in the MySQL database.
+    If they exist in MySQL, it ensures nodes for both attendees exist in Neo4j
+    (creating them if they are missing using the MERGE function) and then creates
+    the relationship, ensuring no duplicate connections or self-connections are made.
+
+    """
+    while True:
+        id1_input = input("\nEnter first Attendee ID: ")
+        id2_input = input("Enter second Attendee ID: ")
+
+        # 1. Validation: verify that the inputs are numeric and not strings or empty
+        if not id1_input.isdigit() or not id2_input.isdigit():
+            print("***ERROR***Attendee IDs must be numbers.")
+            continue
+
+        id1 = int(id1_input)
+        id2 = int(id2_input)
+
+        # 2. Check self-connection
+        if id1 == id2:
+            print("***ERROR***An attendee cannot connect to him/herself.")
+            continue
+
+        # 3. Check MySQL database to ensure BOTH exist
+        # Use IN (...) to check both at once. Since we proved id1 != id2 above,
+        # len(results) must equal exactly 2 if both exist in MySQL.
+        mysql_cursor.execute("SELECT attendeeID FROM attendee WHERE attendeeID IN (%s, %s)", (id1, id2))
+        results = mysql_cursor.fetchall()
+
+        if len(results) != 2:
+            print("***ERROR*** One or both attendees IDs do not exist")
+            continue
+
+        # 4. Neo4j Operations
+        with neo4j_driver.session() as session:
+            # Check if they are ALREADY connected to prevent duplicates
+            check_query = """
+                MATCH (a:Attendee {AttendeeID: $id1})-[:CONNECTED_TO]-(b:Attendee {AttendeeID: $id2})
+                RETURN a
+            """
+            existing_connection = session.run(check_query, id1=id1, id2=id2).data()
+
+            if existing_connection:
+                print("***ERROR***These attendees are already connected")
+                continue
+
+            # MERGE creates the node ONLY if it doesn't already exist in Neo4j database.
+            create_query = """
+                MERGE (a:Attendee {AttendeeID: $id1})
+                MERGE (b:Attendee {AttendeeID: $id2})
+                MERGE (a)-[:CONNECTED_TO]->(b)
+            """
+            session.run(create_query, id1=id1, id2=id2)
+
+        print(f"Attendee {id1} is now connected to Attendee {id2}.")
+        break
 
 # ==================
 # 6. VIEW ROOMS
@@ -179,19 +304,20 @@ def add_new_attendee(conn, cursor):
 
 def view_rooms(cursor, room_cache):
     '''
-    Function to view all rooms details. The first time the user selects this option, the data is fetched from the
-    database and stored in the room_cache list. On subsequent selections, the data is loaded from the cache instead of
-    querying the database again. The rooms added to MySQL database after the user selected this option, will not be
-    visible, unless the user exits and restarts the application.
-    ------------
+    Displays all room details (ID, name, and capacity) using a caching mechanism.
+
+    The first time the user selects this option, the data is fetched from the
+    database and stored in the `room_cache` list. On subsequent selections,
+    the data is loaded from the cache instead of querying the database again.
+    Rooms added to the MySQL database after the initial fetch will not be
+    visible unless the user exits and restarts the application.
+    ----------------
     Parameters:
-        cursor:
-        room_cache:
-    ------------
-
-    Returns: room ID, room name, room capacity.
-        Details for all rooms with caching mechanism to avoid redundant database queries.
-
+        cursor (mysql.connector.cursor.MySQLCursor): The database cursor to execute the query.
+        room_cache (list): A list used to store cached room records in memory.
+    ----------------
+    Returns:
+        None (Output is printed directly to the console).
     '''
     print("\n--- View Rooms ---")
 
@@ -225,8 +351,9 @@ def view_rooms(cursor, room_cache):
 # variables are initialized to "None", in case connection could not be established, to prevent program from crashing
 def main():
     conn = None
-    cursor = None
-    # establish the connection
+    mysql_cursor = None
+    neo4j_driver = None
+    # connect to MySQL
     try:
         conn = mysql.connector.connect(
             host=cfg.mysql['host'],
@@ -234,7 +361,11 @@ def main():
             password=cfg.mysql['password'],
             database=cfg.mysql['database']
         )
-        cursor = conn.cursor()
+        mysql_cursor = conn.cursor()
+        #connect to Neo4j
+        neo4j_driver = GraphDatabase.driver(cfg.neo4j['uri'], auth=(cfg.neo4j['username'], cfg.neo4j['password']))
+        # declare room_cache variable as empty list to store rooms data for caching mechanism in option 6
+        room_cache = []
         # show the menu to the user
         while True:
             menu = input("\nConference Management\n-------------------------\n\nMENU\n====\n"
@@ -247,13 +378,17 @@ def main():
                          "x - Exit Application\nChoice: ")
 
             if menu == '1':
-                view_speakers_and_sessions(cursor)
+                view_speakers_and_sessions(mysql_cursor)
             elif menu == '2':
-                view_attendees_by_company(cursor)
+                view_attendees_by_company(mysql_cursor)
             elif menu == '3':
-                add_new_attendee(conn, cursor)
+                add_new_attendee(conn, mysql_cursor)
+            elif menu == '4':
+                view_connected_attendees(mysql_cursor, neo4j_driver)
+            elif menu == '5':
+                add_attendee_connection(mysql_cursor, neo4j_driver)
             elif menu == '6':
-                view_rooms(cursor, room_cache)
+                view_rooms(mysql_cursor, room_cache)
             elif menu.lower() == 'x':
                 print("Goodbye!")
                 break
@@ -264,10 +399,12 @@ def main():
         print(f"Error: {e}")
     finally:
         # Only close if they were actually successfully created
-        if cursor:
-            cursor.close()
+        if mysql_cursor:
+            mysql_cursor.close()
         if conn and conn.is_connected():
             conn.close()
+        if neo4j_driver:
+            neo4j_driver.close()
 
 
 if __name__ == "__main__":
