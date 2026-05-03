@@ -55,6 +55,7 @@ def view_attendees_by_company(cursor):
     '''
     while True:
         # Validate ID is not blank (user must enter a value)
+        # The .strip() removes any accidental spaces the user might type
         user_input = input("\nEnter Company ID (or 'x' to go back): ").strip()
 
         #check for exit
@@ -111,63 +112,87 @@ def view_attendees_by_company(cursor):
 # 3. ADD NEW ATTENDEE + ERROR HANDLING
 # ======================================
 def add_new_attendee(conn, cursor):
-    '''
-
+    """
     Prompts the user for details to create a new attendee record in MySQL.
 
     Validates that no fields are left empty, IDs are numeric, gender is
     correctly formatted, and that both the Attendee ID (must be unique)
     and Company ID (must exist) are valid.
-
-    Parameters:
-        conn: MySQL connection object (required for commit).
-        cursor: MySQL cursor object.
-
-    '''
-
+    """
     print("\n--- Add New Attendee ---")
+    print("(Type 'x' at any prompt to cancel and return to menu)")
 
-    # 1. Gather and validate inputs from the user
-    attendee_id = input("Enter Attendee ID: ")
-    name = input("Enter Name: ")
-    dob = input("Enter DOB (YYYY-MM-DD): ")
-    gender = input("Enter Gender (Male/Female): ")
-    company_id = input("Enter Company ID: ")
+    # 1. Gather inputs from the user
+    # The .strip() removes any accidental spaces the user might type
+    attendee_id = input("Enter Attendee ID: ").strip()
+    # go back to main menu if user typed in "x"
+    if attendee_id.lower() == 'x':
+        return
 
-    # 2. Validate Gender first
+    name = input("Enter Name: ").strip()
+    if name.lower() == 'x':
+        return
+
+    dob = input("Enter DOB (YYYY-MM-DD): ").strip()
+    if dob.lower() == 'x':
+        return
+
+    gender = input("Enter Gender (Male/Female): ").strip()
+    if gender.lower() == 'x':
+        return
+
+    company_id = input("Enter Company ID: ").strip()
+    if company_id.lower() == 'x':
+        return
+
+    # 2. Check if ANY of the fields were left completely blank
+    if attendee_id == "" or name == "" or dob == "" or gender == "" or company_id == "":
+        print("***ERROR*** No fields can be left empty.")
+        return
+
+    # 3. Check that the IDs are actually numbers
+    if not attendee_id.isdigit() or not company_id.isdigit():
+        print("***ERROR*** Attendee ID and Company ID must be numeric.")
+        return
+
+    # 4. Check that Gender is exactly Male or Female
     if gender not in ['Male', 'Female']:
-        print("***ERROR***Gender must be Male/Female")
-        return  # Exits the function and goes back to the main menu
+        print("***ERROR*** Gender must be Male/Female")
+        return
 
+    # 5. Database Operations (Check existence, then Insert)
     try:
-        # 3. Check if Attendee ID already exists
-        cursor.execute("SELECT attendeeID FROM attendee WHERE attendeeID = %s", (attendee_id,))
+        # Convert IDs to integers now that we know they are safe numbers
+        attendee_id_int = int(attendee_id)
+        company_id_int = int(company_id)
+
+        # Check if Attendee ID already exists
+        cursor.execute("SELECT attendeeID FROM attendee WHERE attendeeID = %s", (attendee_id_int,))
         if cursor.fetchone():
             print(f"***ERROR*** Attendee ID: {attendee_id} already exists")
             return
 
-        # 4. Check if Company ID exists
-        cursor.execute("SELECT companyID FROM company WHERE companyID = %s", (company_id,))
+        # Check if Company ID exists
+        cursor.execute("SELECT companyID FROM company WHERE companyID = %s", (company_id_int,))
         if not cursor.fetchone():
-            print(f"***ERROR***Company ID: {company_id} does not exist")
+            print(f"***ERROR*** Company ID: {company_id} does not exist")
             return
 
-        # 5. Insert the new attendee
+        # Insert the new attendee
         insert_query = """
                        INSERT INTO attendee (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID)
-                       VALUES (%s, %s, %s, %s, %s) \
+                       VALUES (%s, %s, %s, %s, %s)
                        """
-        cursor.execute(insert_query, (attendee_id, name, dob, gender, company_id))
+        cursor.execute(insert_query, (attendee_id_int, name, dob, gender, company_id_int))
 
-        # MUST COMMIT to save the changes to the database
+        # COMMIT to save the changes to the database
         conn.commit()
         print("Attendee successfully added")
-    # CATCH ANY OTHER DATABASE ERRORS
-# add check data types and that all data has been entered, not empty
+
     except Error as e:
+        # This catches things like an invalid Date format (e.g., typing a string for DOB)
         print(f"***ERROR***({e})")
         conn.rollback()  # Undo any pending changes if an error occurred
-
 
 # ==============================================
 # 4. VIEW CONNECTED ATTENDEES + HANDLING ERRORS
