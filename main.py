@@ -12,30 +12,49 @@ from neo4j import GraphDatabase
 # 1. VIEW SPEAKERS AND SESSIONS
 # ===============================
 def view_speakers_and_sessions(cursor):
-    '''
+    """
+    Search for speakers by name or part of a name.
+    If 'x' is entered exactly, the function returns to the main menu.
+    Otherwise, it searches and displays speaker, session title, and room name.
+    """
+    while True:
+        # We use .strip() to ignore accidental leading/trailing spaces
+        search_string = input("\nEnter speaker's name (or part of it). Type 'x' to go back: ").strip()
 
-    The function shows speakers and sessions. The user is prompted to enter a speaker's name (or part of it),
-    and the function retrieves and displays the speaker's name, session title, and room name for all matching records.
-    If no speakers are found, an appropriate message is displayed.
+        # 1. Check for exit command first
+        if search_string.lower() == 'x':
+            return  # Returns to the main menu
 
-    '''
-    search_string = input("Enter speaker's name (or part of it): ")
-    query = """
-            SELECT s.speakerName, s.sessionTitle, r.roomName
-            FROM session s
-                     JOIN room r ON s.roomID = r.roomID
-            WHERE s.speakerName LIKE %s \
-            """
-    cursor.execute(query, (f"%{search_string}%",))
-    results = cursor.fetchall()
+        # 2. Check for empty input
+        if not search_string:
+            print("Search cannot be empty. Please enter a name or 'x' to exit.")
+            continue
 
-    if not results:
-        print("\nNo speakers were found of that name.")
-    else:
-        print(f"\nSession Details for: {search_string}\n{'-' * 44}")
-        for row in results:
-            speaker_name, session_title, room_name = row
-            print(f"Speaker: {speaker_name}\nSession: {session_title}\nRoom: {room_name}\n")
+        query = """
+                SELECT s.speakerName, s.sessionTitle, r.roomName
+                FROM session s
+                         JOIN room r ON s.roomID = r.roomID
+                WHERE s.speakerName LIKE %s
+                """
+
+        cursor.execute(query, (f"%{search_string}%",))
+        results = cursor.fetchall()
+
+        if not results:
+            print(f"\nNo speakers were found with the name '{search_string}'.")
+            # Loop continues so user can try again
+        else:
+            print(f"\nSession Details for: {search_string}")
+            print("-" * 44)
+            for row in results:
+                speaker_name, session_title, room_name = row
+                print(f"Speaker: {speaker_name}")
+                print(f"Session: {session_title}")
+                print(f"Room: {room_name}")
+                print("-" * 20)
+
+            # After showing results, loop back to allow another search
+            # or 'x' to exit.
 
 # ========================================================
 # 2. VIEW ATTENDEES BY COMPANY + HANDLING ERROR CONDITIONS
@@ -94,7 +113,7 @@ def view_attendees_by_company(cursor):
                 """
         cursor.execute(query, (company_id,))
         attendees = cursor.fetchall()
-    # HANDLING ERROR CONDITIONS
+        # HANDLING ERROR CONDITIONS
         if not attendees:
             print(f"No attendees found for {company_name}")
             continue
@@ -270,11 +289,16 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
     If they exist in MySQL, it ensures nodes for both attendees exist in Neo4j
     (creating them if they are missing using the MERGE function) and then creates
     the relationship, ensuring no duplicate connections or self-connections are made.
-
     """
     while True:
-        id1_input = input("\nEnter first Attendee ID: ")
-        id2_input = input("Enter second Attendee ID: ")
+        # Added the 'x' option and .strip() to clean the inputs
+        id1_input = input("\nEnter first Attendee ID (or 'x' to go back): ").strip()
+        if id1_input.lower() == 'x':
+            return
+
+        id2_input = input("Enter second Attendee ID (or 'x' to go back): ").strip()
+        if id2_input.lower() == 'x':
+            return
 
         # 1. Validation: verify that the inputs are numeric and not strings or empty
         if not id1_input.isdigit() or not id2_input.isdigit():
@@ -290,8 +314,6 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
             continue
 
         # 3. Check MySQL database to ensure BOTH exist
-        # Use IN (...) to check both at once. Since we proved id1 != id2 above,
-        # len(results) must equal exactly 2 if both exist in MySQL.
         mysql_cursor.execute("SELECT attendeeID FROM attendee WHERE attendeeID IN (%s, %s)", (id1, id2))
         results = mysql_cursor.fetchall()
 
@@ -322,7 +344,6 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
 
         print(f"Attendee {id1} is now connected to Attendee {id2}.")
         break
-
 # ==================
 # 6. VIEW ROOMS
 # ==================
