@@ -6,8 +6,12 @@ from mysql.connector import Error
 import config as cfg
 # connect to Neo4j database
 from neo4j import GraphDatabase
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import print as rprint
 
-
+console = Console()
 # ===============================
 # 1. VIEW SPEAKERS AND SESSIONS
 # ===============================
@@ -19,7 +23,7 @@ def view_speakers_and_sessions(cursor):
     """
     while True:
         # We use .strip() to ignore accidental leading/trailing spaces
-        search_string = input("\nEnter speaker's name (or part of it). Type 'x' to go back: ").strip()
+        search_string = console.input("\n[bold cyan]Enter speaker's name (or 'x' to go back): [/bold cyan]").strip()
 
         # 1. Check for exit command first
         if search_string.lower() == 'x':
@@ -41,17 +45,18 @@ def view_speakers_and_sessions(cursor):
         results = cursor.fetchall()
 
         if not results:
-            print(f"\nNo speakers were found with the name '{search_string}'.")
+            rprint(f"[bold red]No speakers found with the name '{search_string}'.[/bold red]")
             # Loop continues so user can try again
         else:
-            print(f"\nSession Details for: {search_string}")
-            print("-" * 44)
+            table = Table(title=f"Search Results for: {search_string}", style="cyan")
+            table.add_column("Speaker", style="yellow")
+            table.add_column("Session Title", style="white")
+            table.add_column("Room", style="green")
+
             for row in results:
-                speaker_name, session_title, room_name = row
-                print(f"Speaker: {speaker_name}")
-                print(f"Session: {session_title}")
-                print(f"Room: {room_name}")
-                print("-" * 20)
+                table.add_row(row[0], row[1], row[2])
+
+            console.print(table)
 
             # After showing results, loop back to allow another search
             # or 'x' to exit.
@@ -75,7 +80,7 @@ def view_attendees_by_company(cursor):
     while True:
         # Validate ID is not blank (user must enter a value)
         # The .strip() removes any accidental spaces the user might type
-        user_input = input("\nEnter Company ID (or 'x' to go back): ").strip()
+        user_input = console.input("\n[bold cyan]Enter Company ID (or 'x' to go back): [/bold cyan]").strip()
 
         #check for exit
         if user_input.lower() == 'x':
@@ -83,7 +88,7 @@ def view_attendees_by_company(cursor):
 
         # Validate ID is numeric
         if not user_input or not user_input.isdigit():
-            print("Invalid input. Please enter a numeric Company ID.")
+            rprint("[bold red]Invalid input. Please enter a numeric ID.[/bold red]")
             continue
         company_id = int(user_input)
 
@@ -97,7 +102,7 @@ def view_attendees_by_company(cursor):
         company_row = cursor.fetchone()
 
         if not company_row:
-            print(f"Company with ID {company_id} doesn't exist.")
+            rprint(f"[bold red]Company ID {company_id} not found.[/bold red]")
             continue
 
         company_name = company_row[0]
@@ -115,18 +120,22 @@ def view_attendees_by_company(cursor):
         attendees = cursor.fetchall()
         # HANDLING ERROR CONDITIONS
         if not attendees:
-            print(f"No attendees found for {company_name}")
+            rprint(f"[yellow]No attendees found for {company_row[0]}.[/yellow]")
             continue
 
-        # If we reached here, everything is valid
-        print(f"\nAttendees for {company_name}\n{'-' * 30}")
-        for att in attendees:
-            print(f"Name: {att[0]} | DOB: {att[1]}")
-            print(f"Session: {att[2]}")
-            print(f"Speaker: {att[3]} | Room: {att[4]}")
-            print("-" * 20)
-        break  # Exit the loop and return to main menu
+        else:
+            # Upgrade: Using a Table
+            table = Table(title=f"Attendee Report: {company_row[0]}", style="magenta")
+            table.add_column("Name", style="white")
+            table.add_column("DOB", style="dim")
+            table.add_column("Session", style="blue")
+            table.add_column("Speaker", style="yellow")
 
+            for att in attendees:
+                table.add_row(att[0], str(att[1]), att[2], att[3])
+
+            console.print(table)
+        break
 # ======================================
 # 3. ADD NEW ATTENDEE + ERROR HANDLING
 # ======================================
@@ -390,67 +399,127 @@ def view_rooms(cursor, room_cache):
             print(f"Room ID: {room_id} | Name: {room_name} | Capacity: {capacity}")
 
 
+# ===============================
+# 7. INNOVATION: CONFERENCE DASHBOARD
+# ===============================
+def view_conference_dashboard(cursor):
+    """
+    Innovation Task: Provides a high-level analytical dashboard of the conference
+    using SQL Aggregate functions.
+    """
+    try:
+        # 1. Get Total Attendee Count
+        cursor.execute("SELECT COUNT(*) FROM attendee")
+        total_attendees = cursor.fetchone()[0]
+
+        # 2. Get Most Popular Session
+        cursor.execute("""
+                       SELECT s.sessionTitle, COUNT(r.registrationID) as count
+                       FROM session s
+                           LEFT JOIN registration r
+                       ON s.sessionID = r.sessionID
+                       GROUP BY s.sessionID
+                       ORDER BY count DESC
+                           LIMIT 1
+                       """)
+        pop_session = cursor.fetchone()
+
+        # 3. Get Company with most attendees
+        cursor.execute("""
+                       SELECT c.companyName, COUNT(a.attendeeID) as count
+                       FROM company c
+                           JOIN attendee a
+                       ON c.companyID = a.attendeeCompanyID
+                       GROUP BY c.companyID
+                       ORDER BY count DESC
+                           LIMIT 1
+                       """)
+        top_company = cursor.fetchone()
+
+        # Displaying with Rich Panel for visual appeal
+        dashboard_text = (
+            f"[bold cyan]Total Attendees:[/bold cyan] {total_attendees}\n"
+            f"[bold cyan]Top Session:[/bold cyan] {pop_session[0] if pop_session else 'N/A'} ({pop_session[1] if pop_session else 0} registrations)\n"
+            f"[bold cyan]Top Company:[/bold cyan] {top_company[0] if top_company else 'N/A'} ({top_company[1] if top_company else 0} attendees)"
+        )
+
+        console.print(
+            Panel(dashboard_text, title="[bold yellow]Conference Insights Dashboard[/bold yellow]", expand=False))
+        input("\nPress Enter to return to menu...")
+
+    except Error as e:
+        print(f"Error generating dashboard: {e}")
+
+
+# ===============================
+# NEW: TUI MENU DISPLAY
+# ===============================
+
+def display_menu():
+    """Renders a beautiful menu table using Rich."""
+    table = Table(title="Conference Management System", title_style="bold magenta", header_style="bold yellow",
+                  border_style="cyan")
+
+    table.add_column("Option", justify="center")
+    table.add_column("Functionality", justify="left")
+
+    table.add_row("1", "View Speakers and Sessions")
+    table.add_row("2", "View Attendees by Company")
+    table.add_row("3", "Add New Attendee")
+    table.add_row("4", "View Connected Attendees")
+    table.add_row("5", "Add Attendee Connection")
+    table.add_row("6", "View Rooms")
+    table.add_row("7", "[bold green]View Conference Dashboard[/bold green]")
+    table.add_row("x", "[bold red]Exit Application[/bold red]")
+
+    console.print(Panel(table, border_style="cyan", title="[bold white]EVENT MANAGER v2.0[/bold white]"))
 
 # ==========================================
 # THE MAIN FUNCTION TO RUN THE APPLICATION
 # ==========================================
 # variables are initialized to "None", in case connection could not be established, to prevent program from crashing
 def main():
-    conn = None
-    mysql_cursor = None
-    neo4j_driver = None
-    # connect to MySQL
+    conn, mysql_cursor, neo4j_driver = None, None, None
     try:
-        conn = mysql.connector.connect(
-            host=cfg.mysql['host'],
-            user=cfg.mysql['user'],
-            password=cfg.mysql['password'],
-            database=cfg.mysql['database']
-        )
+        # Standard connections
+        conn = mysql.connector.connect(host=cfg.mysql['host'], user=cfg.mysql['user'],
+                                       password=cfg.mysql['password'], database=cfg.mysql['database'])
         mysql_cursor = conn.cursor()
-        #connect to Neo4j
         neo4j_driver = GraphDatabase.driver(cfg.neo4j['uri'], auth=(cfg.neo4j['username'], cfg.neo4j['password']))
-        # declare room_cache variable as empty list to store rooms data for caching mechanism in option 6
         room_cache = []
-        # show the menu to the user
-        while True:
-            menu = input("\nConference Management\n-------------------------\n\nMENU\n====\n"
-                         "1 - View Speakers and Sessions\n"
-                         "2 - View Attendees by Company\n"
-                         "3 - Add New Attendee\n"
-                         "4 - View Connected Attendees\n"
-                         "5 - Add Attendee Connection\n"
-                         "6 - View Rooms\n"
-                         "x - Exit Application\nChoice: ")
 
-            if menu == '1':
+        while True:
+            # Display the TUI menu
+            display_menu()
+
+            choice = input("Select an option: ").strip().lower()
+
+            if choice == '1':
                 view_speakers_and_sessions(mysql_cursor)
-            elif menu == '2':
+            elif choice == '2':
                 view_attendees_by_company(mysql_cursor)
-            elif menu == '3':
+            elif choice == '3':
                 add_new_attendee(conn, mysql_cursor)
-            elif menu == '4':
+            elif choice == '4':
                 view_connected_attendees(mysql_cursor, neo4j_driver)
-            elif menu == '5':
+            elif choice == '5':
                 add_attendee_connection(mysql_cursor, neo4j_driver)
-            elif menu == '6':
+            elif choice == '6':
                 view_rooms(mysql_cursor, room_cache)
-            elif menu.lower() == 'x':
-                print("Goodbye!")
+            elif choice == '7':
+                view_conference_dashboard(mysql_cursor)
+            elif choice == 'x':
+                console.print("[italic yellow]Exiting... Goodbye![/italic yellow]")
                 break
             else:
-                print("Invalid choice. Please try again.")
-    # handle errors
+                console.print("[bold red]Invalid choice. Please pick a number from the table.[/bold red]")
+
     except Error as e:
-        print(f"Error: {e}")
+        console.print(f"[bold red]Connection Error: {e}[/bold red]")
     finally:
-        # Only close if they were actually successfully created
-        if mysql_cursor:
-            mysql_cursor.close()
-        if conn and conn.is_connected():
-            conn.close()
-        if neo4j_driver:
-            neo4j_driver.close()
+        if mysql_cursor: mysql_cursor.close()
+        if conn and conn.is_connected(): conn.close()
+        if neo4j_driver: neo4j_driver.close()
 
 
 if __name__ == "__main__":
