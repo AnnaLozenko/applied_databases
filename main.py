@@ -6,6 +6,7 @@ from mysql.connector import Error
 import config as cfg
 # connect to Neo4j database
 from neo4j import GraphDatabase
+# rich package components for better enhanced terminal output
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
