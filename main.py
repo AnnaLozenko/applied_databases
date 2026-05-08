@@ -94,7 +94,7 @@ def view_attendees_by_company(cursor):
 
         # Validate numeric ID > 0
         if company_id <= 0:
-            print("Invalid input. Company ID must be greater than 0.")
+            console.print("[bold red]Invalid input. Company ID must be greater than 0.[/bold red]")
             continue
 
         # Check if company exists
@@ -130,12 +130,13 @@ def view_attendees_by_company(cursor):
             table.add_column("DOB", style="dim")
             table.add_column("Session", style="blue")
             table.add_column("Speaker", style="yellow")
+            table.add_column("Room", style="green")
 
             for att in attendees:
-                table.add_row(att[0], str(att[1]), att[2], att[3])
+                table.add_row(att[0], str(att[1]), att[2], att[3], att[4])
 
             console.print(table)
-        break
+
 # ======================================
 # 3. ADD NEW ATTENDEE + ERROR HANDLING
 # ======================================
@@ -152,40 +153,40 @@ def add_new_attendee(conn, cursor):
 
     # 1. Gather inputs from the user
     # The .strip() removes any accidental spaces the user might type
-    attendee_id = input("Enter Attendee ID: ").strip()
+    attendee_id = console.input("[bold cyan]Enter Attendee ID: [/bold cyan]").strip()
     # go back to main menu if user typed in "x"
     if attendee_id.lower() == 'x':
         return
 
-    name = input("Enter Name: ").strip()
+    name = console.input("[bold cyan]Enter Name: [/bold cyan]").strip()
     if name.lower() == 'x':
         return
 
-    dob = input("Enter DOB (YYYY-MM-DD): ").strip()
+    dob = console.input("[bold cyan]Enter DOB (YYYY-MM-DD): [/bold cyan]").strip()
     if dob.lower() == 'x':
         return
 
-    gender = input("Enter Gender (Male/Female): ").strip()
+    gender = console.input("[bold cyan]Enter Gender (Male/Female): [/bold cyan]").strip()
     if gender.lower() == 'x':
         return
 
-    company_id = input("Enter Company ID: ").strip()
+    company_id = console.input("[bold cyan]Enter Company ID: [/bold cyan]").strip()
     if company_id.lower() == 'x':
         return
 
     # 2. Check if ANY of the fields were left completely blank
     if attendee_id == "" or name == "" or dob == "" or gender == "" or company_id == "":
-        print("***ERROR*** No fields can be left empty.")
+        console.print("[bold red]***ERROR*** No fields can be left empty.[/bold red]")
         return
 
     # 3. Check that the IDs are actually numbers
     if not attendee_id.isdigit() or not company_id.isdigit():
-        print("***ERROR*** Attendee ID and Company ID must be numeric.")
+        console.print("[bold red]***ERROR*** Attendee ID and Company ID must be numeric.[/bold red]")
         return
 
     # 4. Check that Gender is exactly Male or Female
     if gender not in ['Male', 'Female']:
-        print("***ERROR*** Gender must be Male/Female")
+        console.print("[bold red]***ERROR*** Gender must be Male/Female[/bold red]")
         return
 
     # 5. Database Operations (Check existence, then Insert)
@@ -197,13 +198,13 @@ def add_new_attendee(conn, cursor):
         # Check if Attendee ID already exists
         cursor.execute("SELECT attendeeID FROM attendee WHERE attendeeID = %s", (attendee_id_int,))
         if cursor.fetchone():
-            print(f"***ERROR*** Attendee ID: {attendee_id} already exists")
+            console.print(f"[bold red]***ERROR*** Attendee ID: {attendee_id} already exists[/bold red]")
             return
 
         # Check if Company ID exists
         cursor.execute("SELECT companyID FROM company WHERE companyID = %s", (company_id_int,))
         if not cursor.fetchone():
-            print(f"***ERROR*** Company ID: {company_id} does not exist")
+            console.print(f"[bold red]***ERROR*** Company ID: {company_id} does not exist[/bold red]")
             return
 
         # Insert the new attendee
@@ -215,11 +216,11 @@ def add_new_attendee(conn, cursor):
 
         # COMMIT to save the changes to the database
         conn.commit()
-        print("Attendee successfully added")
+        console.print("[green]Attendee successfully added[/green]")
 
     except Error as e:
         # This catches things like an invalid Date format (e.g., typing a string for DOB)
-        print(f"***ERROR***({e})")
+        print(f"[red]***ERROR***({e})[/red]")
         conn.rollback()  # Undo any pending changes if an error occurred
 
 # ==============================================
@@ -240,14 +241,14 @@ def view_connected_attendees(mysql_cursor, neo4j_driver):
     '''
 
     while True:
-        user_input = input("\nEnter Attendee ID to view connections (or 'x' to go back): ").strip()
+        user_input = console.input("\n[bold cyan]Enter Attendee ID to view connections (or 'x' to go back): [/bold cyan]").strip()
 
         if user_input.lower() == 'x':
             return
 
         # 1. Validation
         if not user_input or not user_input.isdigit():
-            print("***ERROR*** Invalid Attendee ID. Please enter a number.")
+            console.print("[bold red]***ERROR*** Invalid Attendee ID. Please enter a number.[/bold red]")
             continue
 
         attendee_id = int(user_input)
@@ -257,11 +258,11 @@ def view_connected_attendees(mysql_cursor, neo4j_driver):
         result = mysql_cursor.fetchone()
 
         if not result:
-            print("***ERROR*** Attendee does not exist.")
+            console.print("[bold red]***ERROR*** Attendee does not exist.[/bold red]")
             continue
 
         attendee_name = result[0]
-        print(f"\n--- Connections for {attendee_name} (ID: {attendee_id}) ---")
+        console.print(f"\n[cyan]--- Connections for {attendee_name} (ID: {attendee_id}) ---[/cyan]")
 
         # 3. Query Neo4j for connections
         # The syntax -[:CONNECTED_TO]- without an arrow means all connections are retrieved,
@@ -277,7 +278,7 @@ def view_connected_attendees(mysql_cursor, neo4j_driver):
 
         # 4. Handle results
         if not connected_ids:
-            print("No connections found.")
+            console.print("[yellow]No connections found.[/yellow]")
             break
 
             # 5. Fetch names from MySQL
@@ -285,7 +286,7 @@ def view_connected_attendees(mysql_cursor, neo4j_driver):
             mysql_cursor.execute("SELECT attendeeName FROM attendee WHERE attendeeID = %s", (cid,))
             c_result = mysql_cursor.fetchone()
             if c_result:
-                print(f"ID: {cid} | Name: {c_result[0]}")
+                console.print(f"[cyan]ID: {cid} | Name: {c_result[0]}[/cyan]")
         break
 
 # =============================================
@@ -301,17 +302,17 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
     """
     while True:
         # Added the 'x' option and .strip() to clean the inputs
-        id1_input = input("\nEnter first Attendee ID (or 'x' to go back): ").strip()
+        id1_input = console.input("\n[bold cyan]Enter first Attendee ID (or 'x' to go back): [/bold cyan]").strip()
         if id1_input.lower() == 'x':
             return
 
-        id2_input = input("Enter second Attendee ID (or 'x' to go back): ").strip()
+        id2_input = console.input("[bold cyan]Enter second Attendee ID (or 'x' to go back): [/bold cyan]").strip()
         if id2_input.lower() == 'x':
             return
 
         # 1. Validation: verify that the inputs are numeric and not strings or empty
         if not id1_input.isdigit() or not id2_input.isdigit():
-            print("***ERROR***Attendee IDs must be numbers.")
+            console.print("[bold red]***ERROR***Attendee IDs must be numbers.[/bold red]")
             continue
 
         id1 = int(id1_input)
@@ -319,7 +320,7 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
 
         # 2. Check self-connection
         if id1 == id2:
-            print("***ERROR***An attendee cannot connect to him/herself.")
+            console.print("[bold red]***ERROR***An attendee cannot connect to him/herself.[/bold red]")
             continue
 
         # 3. Check MySQL database to ensure BOTH exist
@@ -327,7 +328,7 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
         results = mysql_cursor.fetchall()
 
         if len(results) != 2:
-            print("***ERROR*** One or both attendees IDs do not exist")
+            console.print("[bold red]***ERROR*** One or both attendees IDs do not exist[/bold red]")
             continue
 
         # 4. Neo4j Operations
@@ -340,7 +341,7 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
             existing_connection = session.run(check_query, id1=id1, id2=id2).data()
 
             if existing_connection:
-                print("***ERROR***These attendees are already connected")
+                console.print("[bold red]***ERROR***These attendees are already connected[/bold red]")
                 continue
 
             # MERGE creates the node ONLY if it doesn't already exist in Neo4j database.
@@ -351,7 +352,7 @@ def add_attendee_connection(mysql_cursor, neo4j_driver):
             """
             session.run(create_query, id1=id1, id2=id2)
 
-        print(f"Attendee {id1} is now connected to Attendee {id2}.")
+        console.print(f"[bold green]Attendee {id1} is now connected to Attendee {id2}.[/bold green]")
         break
 # ==================
 # 6. VIEW ROOMS
@@ -379,7 +380,7 @@ def view_rooms(cursor, room_cache):
     # Check if cache is empty. If it is, this is the FIRST time
     # we are running this option, so we need to query the database.
     if not room_cache:
-        print("(Fetching data from the database...)")
+        console.print("[bold cyan](Fetching data from the database...)[/bold cyan]")
         cursor.execute("SELECT roomID, roomName, capacity FROM room")
         results = cursor.fetchall()
 
@@ -388,18 +389,25 @@ def view_rooms(cursor, room_cache):
         room_cache.extend(results)
     else:
         # If the cache is NOT empty, we skip the database entirely!
-        print("(Loading data from memory...)")
+        console.print("[bold green](Loading data from memory...)[/bold green]")
 
     # Now, print whatever is in the cache
     if not room_cache:
         print("No rooms found in the database.")
     else:
-        for room in room_cache:
-            room_id, room_name, capacity = room
-            print(f"Room ID: {room_id} | Name: {room_name} | Capacity: {capacity}")
 
+        table = Table(title="Available Rooms", style="cyan")
+        table.add_column("Room ID", style="yellow")
+        table.add_column("Name", style="white")
+        table.add_column("Capacity", style="green")
 
-# ===============================
+        for row in room_cache:
+            table.add_row(str(row[0]), str(row[1]), str(row[2]))
+
+        console.print(table)
+    input("\nPress Enter to return to menu...")
+
+    # ===============================
 # 7. INNOVATION: CONFERENCE DASHBOARD
 # ===============================
 def view_conference_dashboard(cursor):
