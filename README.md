@@ -52,31 +52,29 @@ git clone https://github.com/AnnaLozenko/applied_databases.git
 ```bash
 pip install -r requirements.txt
 ```
-3. Configure MySQL and Neo4j databases with the provided schema and credentials.
+3. Environment Configuration: To follow industry security best practices, this application does not contain hardcoded credentials. It utilizes environment variables.
+- Create a file named ```.env``` in the root directory.
+
+- Copy the template below into your new ```.env``` file and replace the placeholders with your actual credentials.  
+- Note: Use ```127.0.0.1``` instead of ```localhost``` for MySQL to prevent socket resolution issues, and wrap your password in quotes if it contains special characters.
+
+```env
+# MySQL Database Credentials
+MYSQL_HOST=localhost
+MYSQL_USER=root
+MYSQL_PASS=mysql_password
+MYSQL_DB=conference_db
+
+# Neo4j Database Credentials
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASS=neo4j_password
+```
+
+3. Database Initialization: Configure MySQL and Neo4j databases with the provided schema and credentials.
 - Ensure MySQL server is running with the provided ```.sql``` schema.
 - Ensure Neo4j is active and the URI/Credentials match those in the application configuration (```config.py```).
 4. Run the application:
 ```bash
 python main.py
 ```
-### Security and Environment Configuration
-To follow industry best practices for security, this application does not contain hardcoded database credentials. Instead, it utilizes environment variables managed via a ```.env``` file.
-Setup Instructions:
-
-- Install the required dependency: ```pip install python-dotenv```.
-
-- Create a file named ```.env``` in the root directory.
-
-- Add your local credentials to the ```.env``` file using the following format:
-
-```env
-MYSQL_HOST=localhost
-MYSQL_USER=root
-MYSQL_PASS=mysql_password
-MYSQL_DB=conference_db
-
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASS=neo4j_password
-```
-An example .env file is provided as ```.env.example``` for reference. Ensure to replace the placeholder values with your actual database credentials.
