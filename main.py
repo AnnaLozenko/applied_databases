@@ -1,3 +1,18 @@
+import subprocess
+import sys
+
+# bootstrap function to check for and install any missing dependencies before the rest of the code runs
+def install_dependencies():
+    requirements = ['rich', 'python-dotenv', 'mysql-connector-python', 'neo4j']
+    for package in requirements:
+        try:
+            __import__(package.replace('-', '_'))
+        except ImportError:
+            print(f"Innovation Package {package} not found. Installing...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# Run the installer before anything else
+install_dependencies()
 # connect to database in MySQL
 import mysql.connector
 # handle errors
