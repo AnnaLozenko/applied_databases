@@ -51,11 +51,20 @@ Key features include:
 git clone https://github.com/AnnaLozenko/applied_databases.git
 
 ```
-2. Install dependencies:
+2. Install dependencies: This project requires the following Python libraries: ```mysql-connector-python```, ```neo4j, rich```, ```and python-dotenv```.
+
+- Automatic Installation:
+The application includes a Bootstrap Script at the start of ```main.py```. Upon execution, the program will automatically detect if these libraries are missing and attempt to install them via ```pip```.
+
+- Manual Installation:
+If the automatic installation fails (e.g., due to restricted internet access on a VM), please run the following command:
 ```bash
-pip install -r requirements.txt
+pip install mysql-connector-python neo4j rich python-dotenv
 ```
-3. Environment Configuration: To follow industry security best practices, this application does not contain hardcoded credentials. It utilizes environment variables.
+3. Database Initialization: Run the provided ```db/init_mysql.sql``` in MySQL Workbench and the ```db/init_neo4j.cypher``` in the Neo4j Browser to automatically set up the required tables, constraints, and sample data.
+- Ensure MySQL server is running with the provided ```.sql``` schema.
+- Ensure Neo4j server is running and the provided ```.cypher``` script has been executed to set up the graph database.
+4. Environment Configuration: To follow industry security best practices, this application does not contain hardcoded credentials. It utilizes environment variables.
 - Create a file named ```.env``` in the root directory.
 
 - Copy the template below into your new ```.env``` file and replace the placeholders with your actual credentials.  
@@ -73,10 +82,9 @@ NEO4J_USER=neo4j
 NEO4J_PASS=neo4j_password
 ```
 
-3. Database Initialization: Run the provided ```db/init_mysql.sql``` in MySQL Workbench and the ```db/init_neo4j.cypher``` in the Neo4j Browser to automatically set up the required tables, constraints, and sample data.
-- Ensure MySQL server is running with the provided ```.sql``` schema.
+
 - Ensure Neo4j is active and the URI/Credentials match those in the ```.env``` file.
-4. Run the application:
+5. Run the application:
 ```bash
 python main.py
 ```
