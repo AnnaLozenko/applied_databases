@@ -21,12 +21,15 @@ Key features include:
 
 ```
 .
-├── main.py               # Main application entry point
-├── .gitignore            # Files to exclude from Git
-├── README.md             # Project overview and documentation
-├── requirements.txt      # List of necessary Python dependencies
-├── config.py             # Configuration file for database credentials (using environment variables)
-├── .env.example          # Example .env file for environment variable setup
+├── main.py                 # Main application entry point
+├── .gitignore              # Files to exclude from Git
+├── README.md               # Project overview and documentation
+├── requirements.txt        # List of necessary Python dependencies
+├── config.py               # Configuration file for database credentials (using environment variables)
+├── .env.example            # Example .env file for environment variable setup
+├── db/
+│   ├── init_mysql.sql      # Database schema and seed data
+│   └── init_neo4j.cypher   # Graph constraints and initial nodes
 
 
 ```
@@ -56,7 +59,6 @@ pip install -r requirements.txt
 - Create a file named ```.env``` in the root directory.
 
 - Copy the template below into your new ```.env``` file and replace the placeholders with your actual credentials.  
-- Note: Use ```127.0.0.1``` instead of ```localhost``` for MySQL to prevent socket resolution issues, and wrap your password in quotes if it contains special characters.
 
 ```env
 # MySQL Database Credentials
@@ -71,9 +73,9 @@ NEO4J_USER=neo4j
 NEO4J_PASS=neo4j_password
 ```
 
-3. Database Initialization: Configure MySQL and Neo4j databases with the provided schema and credentials.
+3. Database Initialization: Run the provided ```db/init_mysql.sql``` in MySQL Workbench and the ```db/init_neo4j.cypher``` in the Neo4j Browser to automatically set up the required tables, constraints, and sample data.
 - Ensure MySQL server is running with the provided ```.sql``` schema.
-- Ensure Neo4j is active and the URI/Credentials match those in the application configuration (```config.py```).
+- Ensure Neo4j is active and the URI/Credentials match those in the ```.env``` file.
 4. Run the application:
 ```bash
 python main.py
