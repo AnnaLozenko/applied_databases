@@ -437,7 +437,7 @@ def view_rooms(cursor, room_cache):
         console.print(table)
     input("\nPress Enter to return to menu...")
 
-    # ===============================
+# ===============================
 # 7. INNOVATION: CONFERENCE DASHBOARD
 # ===============================
 def view_conference_dashboard(cursor):
@@ -490,7 +490,7 @@ def view_conference_dashboard(cursor):
 
 
 # ===============================
-# NEW: TUI MENU DISPLAY
+# TUI MENU DISPLAY
 # ===============================
 
 def display_menu():

@@ -51,7 +51,7 @@ Key features include:
 git clone https://github.com/AnnaLozenko/applied_databases.git
 
 ```
-2. Install dependencies: This project requires the following Python libraries: ```mysql-connector-python```, ```neo4j, rich```, ```and python-dotenv```.
+2. Install dependencies: This project requires the following Python libraries: ```mysql-connector-python==8.3.0```, ```neo4j, rich```, ```and python-dotenv```.
 
 - Automatic Installation:
 The application includes a Bootstrap Script at the start of ```main.py```. Upon execution, the program will automatically detect if these libraries are missing and attempt to install them via ```pip```.
@@ -59,7 +59,7 @@ The application includes a Bootstrap Script at the start of ```main.py```. Upon 
 - Manual Installation:
 If the automatic installation fails (e.g., due to restricted internet access on a VM), please run the following command:
 ```bash
-pip install mysql-connector-python neo4j rich python-dotenv
+pip install mysql-connector-python==8.3.0 neo4j rich python-dotenv
 ```
 3. Database Initialization: Run the provided ```db/init_mysql.sql``` in MySQL Workbench and the ```db/init_neo4j.cypher``` in the Neo4j Browser to automatically set up the required tables, constraints, and sample data.
 - Ensure MySQL server is running with the provided ```.sql``` schema.
