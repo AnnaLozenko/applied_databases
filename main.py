@@ -3,13 +3,27 @@ import sys
 
 # bootstrap function to check for and install any missing dependencies before the rest of the code runs
 def install_dependencies():
-    requirements = ['rich', 'python-dotenv', 'mysql-connector-python', 'neo4j']
-    for package in requirements:
+    requirements = {
+        "rich": "rich",
+        "python-dotenv": "dotenv",
+        "mysql-connector-python==8.3.0": "mysql.connector",
+        "neo4j": "neo4j"
+    }
+
+    for pip_name, import_name in requirements.items():
         try:
-            __import__(package.replace('-', '_'))
+            __import__(import_name)
+
         except ImportError:
-            print(f"Innovation Package {package} not found. Installing...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+            print(f"Package {pip_name} not found. Installing...")
+
+            subprocess.check_call([
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                pip_name
+            ])
 
 # Run the installer before anything else
 install_dependencies()
@@ -539,7 +553,9 @@ def main():
                 console.print("[bold red]Invalid choice. Please pick a number from the table.[/bold red]")
 
     except Error as e:
-        console.print(f"[bold red]Connection Error: {e}[/bold red]")
+        console.print(f"[bold red]MySQL Connection Error: {e}[/bold red]")
+    except Exception as e:
+        console.print(f"[bold red]Unexpected Error: {type(e).__name__}: {e}[/bold red]")
     finally:
         if mysql_cursor: mysql_cursor.close()
         if conn and conn.is_connected(): conn.close()
